@@ -25,7 +25,7 @@ DEALINGS IN THE SOFTWARE.
 """
 
 import asyncio
-import discord
+import disnake
 
 import itertools
 import inspect
@@ -37,27 +37,33 @@ from collections import OrderedDict, namedtuple
 # Needed for the setup.py script
 __version__ = '1.0.0-a'
 
-# consistency with the `discord` namespaced logging
+# consistency with the `disnake` namespaced logging
 log = logging.getLogger(__name__)
+
 
 class MenuError(Exception):
     pass
+
 
 class CannotEmbedLinks(MenuError):
     def __init__(self):
         super().__init__('Bot does not have embed links permission in this channel.')
 
+
 class CannotSendMessages(MenuError):
     def __init__(self):
         super().__init__('Bot cannot send messages in this channel.')
+
 
 class CannotAddReactions(MenuError):
     def __init__(self):
         super().__init__('Bot cannot add reactions in this channel.')
 
+
 class CannotReadMessageHistory(MenuError):
     def __init__(self):
         super().__init__('Bot does not have Read Message History permissions in this channel.')
+
 
 class Position:
     __slots__ = ('number', 'bucket')
@@ -93,20 +99,26 @@ class Position:
     def __repr__(self):
         return '<{0.__class__.__name__}: {0.number}>'.format(self)
 
+
 class Last(Position):
     __slots__ = ()
+
     def __init__(self, number=0):
         super().__init__(number, bucket=2)
 
+
 class First(Position):
     __slots__ = ()
+
     def __init__(self, number=0):
         super().__init__(number, bucket=0)
 
+
 _custom_emoji = re.compile(r'<?(?P<animated>a)?:?(?P<name>[A-Za-z0-9\_]+):(?P<id>[0-9]{13,20})>?')
 
+
 def _cast_emoji(obj, *, _custom_emoji=_custom_emoji):
-    if isinstance(obj, discord.PartialEmoji):
+    if isinstance(obj, disnake.PartialEmoji):
         return obj
 
     obj = str(obj)
@@ -116,8 +128,9 @@ def _cast_emoji(obj, *, _custom_emoji=_custom_emoji):
         animated = bool(groups['animated'])
         emoji_id = int(groups['id'])
         name = groups['name']
-        return discord.PartialEmoji(name=name, animated=animated, id=emoji_id)
-    return discord.PartialEmoji(name=obj, id=None, animated=False)
+        return disnake.PartialEmoji(name=name, animated=animated, id=emoji_id)
+    return disnake.PartialEmoji(name=obj, id=None, animated=False)
+
 
 class Button:
     """Represents a reaction-style button for the :class:`Menu`.
@@ -127,13 +140,13 @@ class Button:
     :func:`button`.
 
     The action must have both a ``self`` and a ``payload`` parameter
-    of type :class:`discord.RawReactionActionEvent`.
+    of type :class:`disnake.RawReactionActionEvent`.
 
     Attributes
     ------------
-    emoji: :class:`discord.PartialEmoji`
+    emoji: :class:`disnake.PartialEmoji`
         The emoji to use as the button. Note that passing a string will
-        transform it into a :class:`discord.PartialEmoji`.
+        transform it into a :class:`disnake.PartialEmoji`.
     action
         A coroutine that is called when the button is pressed.
     skip_if: Optional[Callable[[:class:`Menu`], :class:`bool`]]
@@ -142,7 +155,7 @@ class Button:
         and will not be processed.
     position: :class:`Position`
         The position the button should have in the initial order.
-        Note that since Discord does not actually maintain reaction
+        Note that since disnake does not actually maintain reaction
         order, this is a best effort attempt to have an order until
         the user restarts their client. Defaults to ``Position(0)``.
     lock: :class:`bool`
@@ -212,11 +225,12 @@ class Button:
     def is_valid(self, menu):
         return not self.skip_if(menu)
 
+
 def button(emoji, **kwargs):
     """Denotes a method to be button for the :class:`Menu`.
 
     The methods being wrapped must have both a ``self`` and a ``payload``
-    parameter of type :class:`discord.RawReactionActionEvent`.
+    parameter of type :class:`disnake.RawReactionActionEvent`.
 
     The keyword arguments are forwarded to the :class:`Button` constructor.
 
@@ -239,14 +253,17 @@ def button(emoji, **kwargs):
 
     Parameters
     ------------
-    emoji: Union[:class:`str`, :class:`discord.PartialEmoji`]
+    emoji: Union[:class:`str`, :class:`disnake.PartialEmoji`]
         The emoji to use for the button.
     """
+
     def decorator(func):
         func.__menu_button__ = _cast_emoji(emoji)
         func.__menu_button_kwargs__ = kwargs
         return func
+
     return decorator
+
 
 class _MenuMeta(type):
     @classmethod
@@ -288,12 +305,13 @@ class _MenuMeta(type):
             buttons[emoji] = Button(emoji, func, **func.__menu_button_kwargs__)
         return buttons
 
+
 class Menu(metaclass=_MenuMeta):
     r"""An interface that allows handling menus by using reactions as buttons.
 
     Buttons should be marked with the :func:`button` decorator. Please note that
     this expects the methods to have a single parameter, the ``payload``. This
-    ``payload`` is of type :class:`discord.RawReactionActionEvent`.
+    ``payload`` is of type :class:`disnake.RawReactionActionEvent`.
 
     Attributes
     ------------
@@ -314,14 +332,15 @@ class Menu(metaclass=_MenuMeta):
     bot: Optional[:class:`commands.Bot`]
         The bot that is running this pagination session or ``None`` if it hasn't
         been started yet.
-    message: Optional[:class:`discord.Message`]
+    message: Optional[:class:`disnake.Message`]
         The message that has been sent for handling the menu. This is the returned
         message of :meth:`send_initial_message`. You can set it in order to avoid
         calling :meth:`send_initial_message`\, if for example you have a pre-existing
         message you want to attach a menu to.
     """
+
     def __init__(self, *, timeout=180.0, delete_message_after=False,
-                          clear_reactions_after=False, check_embeds=False, message=None):
+                 clear_reactions_after=False, check_embeds=False, message=None):
 
         self.timeout = timeout
         self.delete_message_after = delete_message_after
@@ -338,7 +357,7 @@ class Menu(metaclass=_MenuMeta):
         self._lock = asyncio.Lock()
         self._event = asyncio.Event()
 
-    @discord.utils.cached_property
+    @disnake.utils.cached_property
     def buttons(self):
         """Retrieves the buttons that are to be used for this menu session.
 
@@ -372,7 +391,7 @@ class Menu(metaclass=_MenuMeta):
 
             If the menu has started and the reaction is added, the order
             property of the newly added button is ignored due to an API
-            limitation with Discord and the fact that reaction ordering
+            limitation with disnake and the fact that reaction ordering
             is not guaranteed.
 
         Parameters
@@ -387,7 +406,7 @@ class Menu(metaclass=_MenuMeta):
         ---------
         MenuError
             Tried to use ``react`` when the menu had not been started.
-        discord.HTTPException
+        disnake.HTTPException
             Adding the reaction failed.
         """
 
@@ -399,7 +418,7 @@ class Menu(metaclass=_MenuMeta):
                     # Add the reaction
                     try:
                         await self.message.add_reaction(button.emoji)
-                    except discord.HTTPException:
+                    except disnake.HTTPException:
                         raise
                     else:
                         # Update the cache to have the value
@@ -409,6 +428,7 @@ class Menu(metaclass=_MenuMeta):
 
             async def dummy():
                 raise MenuError('Menu has not been started yet')
+
             return dummy()
 
     def remove_button(self, emoji, *, react=False):
@@ -430,7 +450,7 @@ class Menu(metaclass=_MenuMeta):
         ---------
         MenuError
             Tried to use ``react`` when the menu had not been started.
-        discord.HTTPException
+        disnake.HTTPException
             Removing the reaction failed.
         """
 
@@ -449,10 +469,12 @@ class Menu(metaclass=_MenuMeta):
                     # doesn't get triggered.
                     self.buttons.pop(emoji, None)
                     await self.message.remove_reaction(emoji, self.__me)
+
                 return wrapped()
 
             async def dummy():
                 raise MenuError('Menu has not been started yet')
+
             return dummy()
 
     def clear_buttons(self, *, react=False):
@@ -475,7 +497,7 @@ class Menu(metaclass=_MenuMeta):
         ---------
         MenuError
             Tried to use ``react`` when the menu had not been started.
-        discord.HTTPException
+        disnake.HTTPException
             Clearing the reactions failed.
         """
 
@@ -505,8 +527,10 @@ class Menu(metaclass=_MenuMeta):
                         await self.message.remove_reaction(reaction, self.__me)
 
                 return wrapped()
+
             async def dummy():
                 raise MenuError('Menu has not been started yet')
+
             return dummy()
 
     def should_add_reactions(self):
@@ -529,13 +553,13 @@ class Menu(metaclass=_MenuMeta):
 
     def reaction_check(self, payload):
         """The function that is used to check whether the payload should be processed.
-        This is passed to :meth:`discord.ext.commands.Bot.wait_for <Bot.wait_for>`.
+        This is passed to :meth:`disnake.ext.commands.Bot.wait_for <Bot.wait_for>`.
 
         There should be no reason to override this function for most users.
 
         Parameters
         ------------
-        payload: :class:`discord.RawReactionActionEvent`
+        payload: :class:`disnake.RawReactionActionEvent`
             The payload to check.
 
         Returns
@@ -616,7 +640,7 @@ class Menu(metaclass=_MenuMeta):
                     for button_emoji in self.buttons:
                         try:
                             await self.message.remove_reaction(button_emoji, self.__me)
-                        except discord.HTTPException:
+                        except disnake.HTTPException:
                             continue
             except Exception:
                 pass
@@ -628,7 +652,7 @@ class Menu(metaclass=_MenuMeta):
 
         Parameters
         -----------
-        payload: :class:`discord.RawReactionActionEvent`
+        payload: :class:`disnake.RawReactionActionEvent`
             The reaction event that triggered this update.
         """
         button = self.buttons[payload.emoji]
@@ -671,7 +695,7 @@ class Menu(metaclass=_MenuMeta):
         -----------
         ctx: :class:`Context`
             The invocation context to use.
-        channel: :class:`discord.abc.Messageable`
+        channel: :class:`disnake.abc.Messageable`
             The messageable to send the message to. If not given
             then it defaults to the channel in the context.
         wait: :class:`bool`
@@ -682,7 +706,7 @@ class Menu(metaclass=_MenuMeta):
         -------
         MenuError
             An error happened when verifying permissions.
-        discord.HTTPException
+        disnake.HTTPException
             Adding a reaction failed.
         """
 
@@ -698,7 +722,7 @@ class Menu(metaclass=_MenuMeta):
         channel = channel or ctx.channel
         me = channel.guild.me if hasattr(channel, 'guild') else ctx.bot.user
         permissions = channel.permissions_for(me)
-        self.__me = discord.Object(id=me.id)
+        self.__me = disnake.Object(id=me.id)
         self._verify_permissions(ctx, channel, permissions)
         self._event.clear()
         msg = self.message
@@ -717,6 +741,7 @@ class Menu(metaclass=_MenuMeta):
             async def add_reactions_task():
                 for emoji in self.buttons:
                     await msg.add_reaction(emoji)
+
             self.__tasks.append(bot.loop.create_task(add_reactions_task()))
 
             if wait:
@@ -728,7 +753,7 @@ class Menu(metaclass=_MenuMeta):
         A coroutine that is called when the menu loop has completed
         its run. This is useful if some asynchronous clean-up is
         required after the fact.
-        
+
         Parameters
         --------------
         timed_out: :class:`bool`
@@ -751,12 +776,12 @@ class Menu(metaclass=_MenuMeta):
         ------------
         ctx: :class:`Context`
             The invocation context to use.
-        channel: :class:`discord.abc.Messageable`
+        channel: :class:`disnake.abc.Messageable`
             The messageable to send the message to.
 
         Returns
         --------
-        :class:`discord.Message`
+        :class:`disnake.Message`
             The message that has been sent.
         """
         raise NotImplementedError
@@ -768,6 +793,7 @@ class Menu(metaclass=_MenuMeta):
             task.cancel()
         self.__tasks.clear()
 
+
 class PageSource:
     """An interface representing a menu page's data source for the actual menu page.
 
@@ -777,6 +803,7 @@ class PageSource:
     - :meth:`is_paginating`
     - :meth:`format_page`
     """
+
     async def _prepare_once(self):
         try:
             # Don't feel like formatting hasattr with
@@ -862,16 +889,16 @@ class PageSource:
         This method must return one of the following types.
 
         If this method returns a ``str`` then it is interpreted as returning
-        the ``content`` keyword argument in :meth:`discord.Message.edit`
-        and :meth:`discord.abc.Messageable.send`.
+        the ``content`` keyword argument in :meth:`disnake.Message.edit`
+        and :meth:`disnake.abc.Messageable.send`.
 
-        If this method returns a :class:`discord.Embed` then it is interpreted
-        as returning the ``embed`` keyword argument in :meth:`discord.Message.edit`
-        and :meth:`discord.abc.Messageable.send`.
+        If this method returns a :class:`disnake.Embed` then it is interpreted
+        as returning the ``embed`` keyword argument in :meth:`disnake.Message.edit`
+        and :meth:`disnake.abc.Messageable.send`.
 
         If this method returns a ``dict`` then it is interpreted as the
-        keyword-arguments that are used in both :meth:`discord.Message.edit`
-        and :meth:`discord.abc.Messageable.send`. The two of interest are
+        keyword-arguments that are used in both :meth:`disnake.Message.edit`
+        and :meth:`disnake.abc.Messageable.send`. The two of interest are
         ``embed`` and ``content``.
 
         Parameters
@@ -883,10 +910,11 @@ class PageSource:
 
         Returns
         ---------
-        Union[:class:`str`, :class:`discord.Embed`, :class:`dict`]
+        Union[:class:`str`, :class:`disnake.Embed`, :class:`dict`]
             See above.
         """
         raise NotImplementedError
+
 
 class MenuPages(Menu):
     """A special type of Menu dedicated to pagination.
@@ -897,6 +925,7 @@ class MenuPages(Menu):
         The current page that we are in. Zero-indexed
         between [0, :attr:`PageSource.max_pages`).
     """
+
     def __init__(self, source, **kwargs):
         self._source = source
         self.current_page = 0
@@ -935,13 +964,13 @@ class MenuPages(Menu):
         return self._source.is_paginating()
 
     async def _get_kwargs_from_page(self, page):
-        value = await discord.utils.maybe_coroutine(self._source.format_page, self, page)
+        value = await disnake.utils.maybe_coroutine(self._source.format_page, self, page)
         if isinstance(value, dict):
             return value
         elif isinstance(value, str):
-            return { 'content': value, 'embed': None }
-        elif isinstance(value, discord.Embed):
-            return { 'embed': value, 'content': None }
+            return {'content': value, 'embed': None}
+        elif isinstance(value, disnake.Embed):
+            return {'embed': value, 'content': None}
 
     async def show_page(self, page_number):
         page = await self._source.get_page(page_number)
@@ -1015,6 +1044,7 @@ class MenuPages(Menu):
         """stops the pagination session."""
         self.stop()
 
+
 class ListPageSource(PageSource):
     """A data source for a sequence of items.
 
@@ -1065,7 +1095,9 @@ class ListPageSource(PageSource):
             base = page_number * self.per_page
             return self.entries[base:base + self.per_page]
 
+
 _GroupByEntry = namedtuple('_GroupByEntry', 'key items')
+
 
 class GroupByPageSource(ListPageSource):
     """A data source for grouped by sequence of items.
@@ -1087,6 +1119,7 @@ class GroupByPageSource(ListPageSource):
     per_page: :class:`int`
         How many elements to have per page of the group.
     """
+
     def __init__(self, entries, *, key, per_page, sort=True):
         self.__entries = entries if not sort else sorted(entries, key=key)
         nested = []
@@ -1098,7 +1131,7 @@ class GroupByPageSource(ListPageSource):
             size = len(g)
 
             # Chunk the nested pages
-            nested.extend(_GroupByEntry(key=k, items=g[i:i+per_page]) for i in range(0, size, per_page))
+            nested.extend(_GroupByEntry(key=k, items=g[i:i + per_page]) for i in range(0, size, per_page))
 
         super().__init__(nested, per_page=1)
 
@@ -1128,6 +1161,7 @@ class GroupByPageSource(ListPageSource):
         """
         raise NotImplementedError
 
+
 def _aiter(obj, *, _isasync=inspect.iscoroutinefunction):
     cls = obj.__class__
     try:
@@ -1139,6 +1173,7 @@ def _aiter(obj, *, _isasync=inspect.iscoroutinefunction):
     if _isasync(async_iter):
         raise TypeError('{0.__name__!r} object is not an async iterable'.format(cls))
     return async_iter
+
 
 class AsyncIteratorPageSource(PageSource):
     """A data source for data backed by an asynchronous iterator.
